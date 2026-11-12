@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="g35_2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6D5BF6"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <filter id="blur35_2" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="58"/>
+    </filter>
+    <linearGradient id="v35_2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.34"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#g35_2)"/>
+  <line x1="0" y1="120" x2="800" y2="120" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/><line x1="0" y1="240" x2="800" y2="240" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/><line x1="0" y1="360" x2="800" y2="360" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/><line x1="0" y1="480" x2="800" y2="480" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+  <circle cx="400" cy="96" r="210" fill="#ffffff" opacity="0.36" filter="url(#blur35_2)"/><circle cx="656" cy="504" r="120" fill="#ffffff" opacity="0.26" filter="url(#blur35_2)"/><circle cx="96" cy="324" r="150" fill="#ffffff" opacity="0.3" filter="url(#blur35_2)"/>
+  <rect width="800" height="600" fill="url(#v35_2)"/>
+</svg>

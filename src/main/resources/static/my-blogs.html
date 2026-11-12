@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>我的笔记 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:24px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="title">我的笔记</div>
+        <div class="spacer"></div>
+        <a class="action" id="newLink">写一篇</a>
+    </header>
+
+    <div class="section" id="list"></div>
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">📝</div>
+        <p>还没有发布过笔记</p>
+        <a class="btn btn-ghost btn-sm" href="/index.html" style="margin-top:14px">去探店</a>
+    </div>
+    <div class="loadmore" id="sentinel"></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    document.getElementById('newLink').onclick = () => {
+        if (requireLogin()) location.href = '/blog-edit.html';
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!HM.isLogin()) {
+            goLogin();
+            return;
+        }
+        createPager({
+            fetch: async (page) => {
+                const r = await api('/blog/of/me?current=' + page);
+                return {list: r.data || [], total: r.total, size: 5};
+            },
+            render: (list, first) => {
+                const box = document.getElementById('list');
+                if (first) box.innerHTML = '';
+                box.insertAdjacentHTML('beforeend', list.map(blogCardHtml).join(''));
+            },
+            sentinel: document.getElementById('sentinel'),
+            emptyEl: document.getElementById('empty')
+        });
+    });
+</script>
+</body>
+</html>

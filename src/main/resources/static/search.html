@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>搜索 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:24px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="searchbar" style="margin:0;flex:1;height:38px;box-shadow:none;background:#f4f5f7">
+            <span class="ico" id="searchIco"></span>
+            <input id="kw" placeholder="搜索店铺名称" autofocus>
+        </div>
+        <button class="action" id="doSearch">搜索</button>
+    </header>
+
+    <div class="section">
+        <div class="section-head"><h2 style="font-size:15px">热门搜索</h2></div>
+        <div class="chip-row" id="hotWords">
+            <button class="chip">海底捞</button>
+            <button class="chip">烤鸭</button>
+            <button class="chip">KTV</button>
+            <button class="chip">健身</button>
+            <button class="chip">咖啡</button>
+            <button class="chip">日料</button>
+        </div>
+    </div>
+
+    <div class="section" id="list"></div>
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">🔍</div>
+        <p>没有找到相关店铺</p>
+    </div>
+    <div class="loadmore" id="sentinel"></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    document.getElementById('searchIco').innerHTML = ICON.search;
+    let pager = null;
+
+    function search(name) {
+        if (!name) {
+            toast('请输入关键词');
+            return;
+        }
+        document.getElementById('kw').value = name;
+        document.getElementById('empty').style.display = 'none';
+        document.getElementById('list').innerHTML = '';
+        pager = createPager({
+            fetch: async (page) => {
+                const r = await api('/shop/of/name?name=' + encodeURIComponent(name) + '&current=' + page);
+                return {list: r.data || [], total: r.total, size: 5};
+            },
+            render: (list, first) => {
+                const box = document.getElementById('list');
+                if (first) box.innerHTML = '';
+                box.insertAdjacentHTML('beforeend', list.map(shopCardHtml).join(''));
+            },
+            sentinel: document.getElementById('sentinel'),
+            emptyEl: document.getElementById('empty')
+        });
+    }
+
+    document.getElementById('doSearch').onclick = () => search(document.getElementById('kw').value.trim());
+    document.getElementById('kw').addEventListener('keydown', e => {
+        if (e.key === 'Enter') search(e.target.value.trim());
+    });
+    document.querySelectorAll('#hotWords .chip').forEach(c => {
+        c.onclick = () => search(c.textContent);
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const init = query('name');
+        if (init) search(init);
+    });
+</script>
+</body>
+</html>

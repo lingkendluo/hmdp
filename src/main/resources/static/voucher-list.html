@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>秒杀专区 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:24px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="title">秒杀专区</div>
+        <div class="spacer"></div>
+    </header>
+
+    <div class="hint-bar" style="margin-top:12px">
+        <span>⚡</span>
+        <span>库存已预热到 Redis，下单走 Lua 脚本原子扣减，一人一单。</span>
+    </div>
+
+    <div class="section" id="list"></div>
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">⚡</div>
+        <p>暂时没有进行中的秒杀活动</p>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    function voucherItem(v) {
+        const soldOut = v.stock !== null && v.stock !== undefined && v.stock <= 0;
+        return `
+        <a class="voucher seckill" href="/voucher.html?id=${v.id}">
+            <div class="v-left">
+                <div class="v-title">${esc(v.title)}</div>
+                <div class="v-rule">${esc(v.shopName || '')}</div>
+                <div class="v-price">
+                    <span class="price"><span class="unit">¥</span><span class="num">${yuan(v.payValue)}</span></span>
+                    <span class="strike">¥${yuan(v.actualValue)}</span>
+                </div>
+            </div>
+            <div class="v-right">
+                <span class="stock">${soldOut ? '已抢光' : '剩 ' + v.stock + ' 张'}</span>
+                <span class="btn ${soldOut ? 'btn-line' : 'btn-primary'} btn-sm">${soldOut ? '看看' : '去抢'}</span>
+            </div>
+        </a>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const res = await api('/voucher/seckill/list');
+            const list = res.data || [];
+            if (!list.length) {
+                document.getElementById('empty').style.display = 'block';
+                return;
+            }
+            document.getElementById('list').innerHTML = list.map(voucherItem).join('');
+        } catch (e) { /* ignore */ }
+    });
+</script>
+</body>
+</html>

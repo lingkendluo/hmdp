@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>关注 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app">
+    <header class="topbar">
+        <div class="title">关注</div>
+        <div class="spacer"></div>
+        <a class="action" href="/my-blogs.html">发笔记</a>
+    </header>
+
+    <div class="hint-bar" style="margin-top:12px">
+        <span>💡</span>
+        <span>这里是你关注的人最新发布的探店笔记，下拉滚动加载（Redis SortedSet 滚动分页）。</span>
+    </div>
+
+    <div class="section" id="list"></div>
+
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">💛</div>
+        <p id="emptyText">还没有关注的人</p>
+        <a class="btn btn-ghost btn-sm" href="/index.html" style="margin-top:14px">去发现好店</a>
+    </div>
+
+    <div class="loadmore" id="sentinel"></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    let maxTime = null;
+    let offset = 0;
+    let loading = false;
+    let done = false;
+
+    async function load(reset = false) {
+        if (loading || done) return;
+        loading = true;
+        const sentinel = document.getElementById('sentinel');
+        sentinel.textContent = '加载中…';
+        try {
+            const params = new URLSearchParams();
+            if (maxTime) {
+                params.set('maxTime', maxTime);
+                params.set('offset', offset);
+            }
+            const res = await api('/blog/of/follow?' + params.toString());
+            const d = res.data;
+            const list = d.list || [];
+            if (reset) document.getElementById('list').innerHTML = '';
+            if (!list.length) {
+                done = true;
+                if (!document.getElementById('list').children.length) {
+                    document.getElementById('empty').style.display = 'block';
+                    document.getElementById('emptyText').textContent =
+                        '关注的人还没有发布新笔记，去首页逛逛吧';
+                }
+                sentinel.textContent = '';
+                return;
+            }
+            document.getElementById('list').insertAdjacentHTML('beforeend', list.map(blogCardHtml).join(''));
+            maxTime = d.minTime;
+            offset = d.offset;
+            if (list.length < 2) {
+                done = true;
+                sentinel.textContent = '— 没有更多了 —';
+            } else {
+                sentinel.textContent = '';
+            }
+            // 内容不足一屏时继续加载
+            if (!done && document.body.scrollHeight <= window.innerHeight + 40) {
+                setTimeout(() => load(), 60);
+            }
+        } catch (e) {
+            sentinel.textContent = '加载失败，点击重试';
+            sentinel.onclick = () => { sentinel.onclick = null; load(); };
+        } finally {
+            loading = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTabbar('feed');
+        if (!HM.isLogin()) {
+            goLogin();
+            return;
+        }
+        load(true);
+        const io = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting) load();
+        }, {rootMargin: '160px'});
+        io.observe(document.getElementById('sentinel'));
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>附近 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app">
+    <header class="topbar">
+        <div class="title">附近好店</div>
+        <div class="spacer"></div>
+        <span class="tiny">📍 三里屯</span>
+    </header>
+
+    <div style="padding:12px 14px 4px">
+        <div class="chip-row" id="chips"></div>
+    </div>
+
+    <div class="hint-bar">
+        <span>🧭</span>
+        <span>按距离由近到远排序，数据来自 Redis GEO（GEORADIUS 半径检索）。</span>
+    </div>
+
+    <div class="section" id="list"></div>
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">📍</div>
+        <p>附近 10 公里内没有找到店铺</p>
+    </div>
+    <div class="loadmore" id="sentinel"></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    // 三里屯太古里坐标
+    const POS = {x: 116.4551, y: 39.9345};
+    let typeId = null;
+    let pager = null;
+
+    async function loadChips() {
+        const res = await api('/shop-type/list');
+        const box = document.getElementById('chips');
+        box.innerHTML = [{id: null, name: '全部'}, ...res.data].map(t => `
+            <button class="chip ${t.id === typeId ? 'on' : ''}" data-id="${t.id}">${esc(t.name)}</button>`).join('');
+        box.querySelectorAll('.chip').forEach(el => {
+            el.onclick = () => {
+                typeId = el.dataset.id === 'null' ? null : Number(el.dataset.id);
+                box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === el));
+                restart();
+            };
+        });
+    }
+
+    function restart() {
+        document.getElementById('list').innerHTML = '';
+        document.getElementById('empty').style.display = 'none';
+        pager = createPager({
+            fetch: async (page) => {
+                const p = new URLSearchParams({current: page, x: POS.x, y: POS.y});
+                if (typeId) p.set('typeId', typeId);
+                const r = await api('/shop/of/type?' + p.toString());
+                return {list: r.data || [], total: r.total, size: 5};
+            },
+            render: (list, first) => {
+                const box = document.getElementById('list');
+                if (first) box.innerHTML = '';
+                box.insertAdjacentHTML('beforeend', list.map(shopCardHtml).join(''));
+            },
+            sentinel: document.getElementById('sentinel'),
+            emptyEl: document.getElementById('empty')
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        renderTabbar('near');
+        await loadChips().catch(() => {});
+        restart();
+    });
+</script>
+</body>
+</html>

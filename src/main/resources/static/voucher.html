@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>券详情 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:84px">
+    <div class="voucher-hero">
+        <div class="vh-price">
+            <span class="cur">¥</span>
+            <span class="big" id="payPrice">0</span>
+            <span style="font-size:13px;opacity:.85;margin-left:6px">券面 ¥<span id="actualPrice">0</span></span>
+        </div>
+        <div class="vh-title" id="vTitle">加载中…</div>
+        <div class="vh-sub" id="vSub"></div>
+        <div class="countdown" id="countdown" style="display:none">
+            <span>距结束</span><b id="cdH">00</b>:<b id="cdM">00</b>:<b id="cdS">00</b>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="card" style="padding:16px">
+            <div style="display:flex;align-items:center;gap:12px">
+                <img id="shopImg" src="/imgs/shop/1-1.svg" style="width:56px;height:56px;border-radius:12px;object-fit:cover">
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:15px;font-weight:650" id="shopName">—</div>
+                    <div class="tiny" style="margin-top:3px">凭券到店核销</div>
+                </div>
+                <a class="btn btn-line btn-sm" id="shopLink">看店铺</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="card" style="padding:4px 0">
+            <div class="listitem">
+                <div class="li-icon">📦</div>
+                <div class="li-text">剩余库存</div>
+                <div class="tag" id="stockText">—</div>
+            </div>
+            <div class="listitem">
+                <div class="li-icon">⏰</div>
+                <div class="li-text">活动时间</div>
+                <div class="tiny" id="timeText">—</div>
+            </div>
+            <div class="listitem">
+                <div class="li-icon">🔒</div>
+                <div class="li-text">限购规则</div>
+                <div class="tiny">每人限 1 张</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="card rule-list">
+            <h3>使用规则</h3>
+            <ul id="rules"></ul>
+        </div>
+    </div>
+
+    <div class="hint-bar">
+        <span>💡</span>
+        <span>下单走的是 Redis + Lua 原子扣减，异步落库，同一用户只会成功一次。</span>
+    </div>
+
+    <div class="actionbar">
+        <div style="flex:1">
+            <div class="price"><span class="unit">¥</span><span class="num" id="barPrice">0</span></div>
+            <div class="tiny" id="barTip">手慢无</div>
+        </div>
+        <button class="btn btn-primary" style="flex:0 0 170px" id="buyBtn">立即抢购</button>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    const vid = query('id');
+    let voucher = null;
+    let cdTimer = null;
+
+    function render() {
+        document.getElementById('payPrice').textContent = yuan(voucher.payValue);
+        document.getElementById('actualPrice').textContent = yuan(voucher.actualValue);
+        document.getElementById('barPrice').textContent = yuan(voucher.payValue);
+        document.getElementById('vTitle').textContent = voucher.title;
+        document.getElementById('vSub').textContent = voucher.subTitle || '';
+        document.getElementById('shopName').textContent = voucher.shopName || '合作店铺';
+        document.getElementById('shopImg').src = firstImg(voucher.shopImages || '');
+        document.getElementById('shopLink').href = '/shop.html?id=' + voucher.shopId;
+        document.getElementById('stockText').textContent =
+            voucher.stock > 0 ? '剩 ' + voucher.stock + ' 张' : '已抢光';
+
+        if (voucher.beginTime) {
+            document.getElementById('timeText').textContent =
+                voucher.beginTime.replace('T', ' ').slice(5, 16) + ' 至 ' +
+                (voucher.endTime || '').replace('T', ' ').slice(5, 16);
+        }
+
+        const rules = (voucher.rules || '到店出示即可使用').split(/[；;]/).filter(Boolean);
+        document.getElementById('rules').innerHTML =
+            rules.map(r => `<li>${esc(r.trim())}</li>`).join('') +
+            '<li>每张券仅限单次使用，不找零、不兑现</li><li>秒杀订单支付后 7 天内有效</li>';
+
+        document.title = voucher.title + ' · 黑马点评';
+        startCountdown();
+    }
+
+    function startCountdown() {
+        if (!voucher.endTime) return;
+        const end = new Date(voucher.endTime).getTime();
+        const box = document.getElementById('countdown');
+        box.style.display = 'inline-flex';
+        const tick = () => {
+            const left = end - Date.now();
+            if (left <= 0) {
+                box.innerHTML = '<span>活动已结束</span>';
+                document.getElementById('buyBtn').disabled = true;
+                clearInterval(cdTimer);
+                return;
+            }
+            const d = Math.floor(left / 86400000);
+            const h = Math.floor(left % 86400000 / 3600000);
+            const m = Math.floor(left % 3600000 / 60000);
+            const s = Math.floor(left % 60000 / 1000);
+            document.getElementById('cdH').textContent = String(d > 0 ? h : h).padStart(2, '0');
+            document.getElementById('cdM').textContent = String(m).padStart(2, '0');
+            document.getElementById('cdS').textContent = String(s).padStart(2, '0');
+            // 超过一天时，把天数并到第一格显示
+            document.getElementById('cdH').previousElementSibling.textContent = d > 0 ? `${d}天` : '距结束';
+        };
+        tick();
+        cdTimer = setInterval(tick, 1000);
+    }
+
+    async function buy() {
+        if (!requireLogin()) return;
+        const btn = document.getElementById('buyBtn');
+        btn.disabled = true;
+        btn.textContent = '抢购中…';
+        try {
+            const res = await api('/voucher-order/seckill/' + vid, {method: 'POST'});
+            toast('抢购成功，正在为你创建订单');
+            setTimeout(() => location.href = '/orders.html?highlight=' + res.data, 900);
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = '立即抢购';
+            // 库存可能已变化，刷新一下
+            load();
+        }
+    }
+
+    async function load() {
+        const res = await api('/voucher/' + vid);
+        voucher = res.data;
+        render();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('buyBtn').onclick = buy;
+        if (!vid) {
+            toast('缺少券参数');
+            return;
+        }
+        load().catch(() => {});
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>探店笔记 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:80px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="title">探店笔记</div>
+        <div class="spacer"></div>
+        <a class="action" id="shopLink" style="display:none">店铺 ›</a>
+    </header>
+
+    <div class="blog-detail">
+        <div class="bd-cover"><img class="cover" id="cover" src="/imgs/shop/1-1.svg" alt=""></div>
+        <div class="bd-body">
+            <div class="author-bar">
+                <img id="authorIcon" src="/imgs/avatar/1.svg" alt="">
+                <div style="flex:1">
+                    <div class="an" id="authorName">—</div>
+                    <div class="at" id="publishTime">—</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="followBtn">关注</button>
+            </div>
+            <h1 id="title">加载中…</h1>
+            <div class="bd-text" id="content"></div>
+
+            <div style="margin-top:22px;display:flex;align-items:center;gap:14px" class="tiny">
+                <span id="likeCount">0 人点赞</span>
+                <span id="commentCount">0 条评论</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head"><h2 style="font-size:15px">点赞的人</h2></div>
+        <div id="likers" class="tiny">加载中…</div>
+    </div>
+
+    <div class="section">
+        <div class="section-head"><h2 style="font-size:15px">相关店铺</h2></div>
+        <div id="shopBox"></div>
+    </div>
+
+    <div class="actionbar">
+        <button class="like-btn" id="likeBtn">
+            <span class="ico" id="likeIcon"></span>
+            <span id="likeLabel">点赞</span>
+        </button>
+        <button class="like-btn" onclick="toast('评论功能演示版暂未开放')">
+            <span class="ico" id="cmtIcon"></span>
+            <span>评论</span>
+        </button>
+        <button class="btn btn-primary btn-block" id="shopBtn" style="margin-left:6px">查看店铺</button>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    const blogId = query('id');
+    let blog = null;
+    let liked = false;
+
+    function render() {
+        document.title = blog.title + ' · 黑马点评';
+        document.getElementById('cover').src = firstImg(blog.images);
+        document.getElementById('authorName').textContent = blog.userName || '匿名用户';
+        document.getElementById('authorIcon').src = blog.userIcon || '/imgs/avatar/1.svg';
+        document.getElementById('publishTime').textContent = timeAgo(blog.createTime) + '发布';
+        document.getElementById('title').textContent = blog.title;
+        document.getElementById('content').textContent = blog.content;
+        document.getElementById('likeCount').textContent = (blog.liked || 0) + ' 人点赞';
+        document.getElementById('commentCount').textContent = (blog.comments || 0) + ' 条评论';
+        liked = !!blog.isLiked;
+        paintLike();
+
+        if (blog.shopId) {
+            const a = document.getElementById('shopLink');
+            a.style.display = 'block';
+            a.href = '/shop.html?id=' + blog.shopId;
+        }
+        loadShop();
+    }
+
+    function paintLike() {
+        const btn = document.getElementById('likeBtn');
+        btn.classList.toggle('on', liked);
+        document.getElementById('likeIcon').innerHTML = liked ? ICON.heartFill : ICON.heart;
+        document.getElementById('likeLabel').textContent = liked ? '已赞' : '点赞';
+    }
+
+    async function toggleLike() {
+        if (!requireLogin()) return;
+        try {
+            const res = await api('/blog/like/' + blogId, {method: 'PUT'});
+            liked = res.data.liked;
+            blog.liked = res.data.likedCount;
+            paintLike();
+            document.getElementById('likeCount').textContent = blog.liked + ' 人点赞';
+            loadLikers();
+        } catch (e) { /* ignore */ }
+    }
+
+    async function loadLikers() {
+        try {
+            const res = await api('/blog/likes/' + blogId, {quiet: true});
+            const list = res.data || [];
+            const box = document.getElementById('likers');
+            if (!list.length) {
+                box.innerHTML = '<span class="tiny">还没有人点赞</span>';
+                return;
+            }
+            box.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap">` +
+                list.map(u => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:56px">
+                    <img src="${u.icon || '/imgs/avatar/1.svg'}" style="width:38px;height:38px;border-radius:50%">
+                    <span style="font-size:11px;color:#6b7280;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.nickName)}</span>
+                </div>`).join('') + '</div>';
+        } catch (e) { /* ignore */ }
+    }
+
+    async function loadShop() {
+        try {
+            const res = await api('/shop/' + blog.shopId, {quiet: true});
+            document.getElementById('shopBox').innerHTML = shopCardHtml(res.data);
+        } catch (e) { /* ignore */ }
+    }
+
+    async function loadFollowState() {
+        if (!HM.isLogin() || !blog) return;
+        try {
+            const res = await api('/follow/or/not/' + blog.userId, {quiet: true});
+            const btn = document.getElementById('followBtn');
+            if (res.data) {
+                btn.textContent = '已关注';
+                btn.classList.remove('btn-ghost');
+                btn.classList.add('btn-line');
+            }
+            btn.onclick = async () => {
+                const now = btn.textContent === '已关注';
+                await api(`/follow/${blog.userId}/${!now}`, {method: 'PUT'});
+                btn.textContent = now ? '关注' : '已关注';
+                btn.classList.toggle('btn-ghost', now);
+                btn.classList.toggle('btn-line', !now);
+                toast(now ? '已取消关注' : '关注成功');
+            };
+        } catch (e) { /* ignore */ }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        document.getElementById('likeBtn').onclick = toggleLike;
+        document.getElementById('likeIcon').innerHTML = ICON.heart;
+        document.getElementById('cmtIcon').innerHTML = ICON.comment;
+
+        if (!blogId) {
+            toast('缺少笔记参数');
+            return;
+        }
+        try {
+            const res = await api('/blog/' + blogId);
+            blog = res.data;
+            render();
+            loadLikers();
+            loadFollowState();
+            document.getElementById('shopBtn').onclick = () => {
+                if (blog.shopId) location.href = '/shop.html?id=' + blog.shopId;
+            };
+        } catch (e) { /* ignore */ }
+    });
+</script>
+</body>
+</html>

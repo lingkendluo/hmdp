@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>店铺详情 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:80px">
+    <div class="shop-hero">
+        <img id="heroImg" src="/imgs/shop/1-1.svg" alt="">
+        <div class="veil"></div>
+        <div class="nav">
+            <button class="circle back-btn" id="backBtn">‹</button>
+            <div style="flex:1"></div>
+            <button class="circle" id="favBtn">☆</button>
+        </div>
+        <div class="dots" id="dots"></div>
+    </div>
+
+    <div class="shop-info">
+        <h1 id="shopName">加载中…</h1>
+        <div class="stats" id="stats"></div>
+        <div class="addr">
+            <span class="ico">📍</span>
+            <span id="addrText"></span>
+        </div>
+        <div class="addr" style="margin-top:6px">
+            <span class="ico">🕐</span>
+            <span id="hoursText" class="tiny"></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>优惠券</h2>
+            <span class="tiny" id="uvText"></span>
+        </div>
+        <div id="vouchers">
+            <div class="skeleton" style="height:86px;margin-bottom:10px"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>探店笔记</h2>
+            <a class="more" id="writeLink">写笔记 ›</a>
+        </div>
+        <div id="blogs"></div>
+        <div class="empty" id="empty" style="display:none">
+            <div class="ico">📝</div>
+            <p>还没有人写过这家店，来抢沙发</p>
+        </div>
+        <div class="loadmore" id="sentinel"></div>
+    </div>
+
+    <div class="actionbar">
+        <button class="btn btn-ghost" style="flex:0 0 108px;padding:0 10px;font-size:14px" id="favBtn2">收藏</button>
+        <button class="btn btn-primary btn-block" id="writeBtn">发布探店笔记</button>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    const shopId = query('id');
+    let shop = null;
+    let images = [];
+    let imgIndex = 0;
+    let timer = null;
+
+    function renderCarousel() {
+        images = imgArr(shop.images);
+        if (!images.length) images = ['/imgs/shop/1-1.svg'];
+        document.getElementById('heroImg').src = images[0];
+        document.getElementById('dots').innerHTML = images.map((_, i) =>
+            `<i class="${i === 0 ? 'on' : ''}"></i>`).join('');
+        if (images.length > 1) {
+            timer = setInterval(() => {
+                imgIndex = (imgIndex + 1) % images.length;
+                document.getElementById('heroImg').src = images[imgIndex];
+                document.querySelectorAll('#dots i').forEach((d, i) =>
+                    d.classList.toggle('on', i === imgIndex));
+            }, 3500);
+        }
+        document.getElementById('heroImg').onclick = () => {
+            imgIndex = (imgIndex + 1) % images.length;
+            document.getElementById('heroImg').src = images[imgIndex];
+            document.querySelectorAll('#dots i').forEach((d, i) =>
+                d.classList.toggle('on', i === imgIndex));
+        };
+    }
+
+    function renderInfo() {
+        document.getElementById('shopName').textContent = shop.name;
+        document.title = shop.name + ' · 黑马点评';
+        document.getElementById('stats').innerHTML = `
+            <span class="score"><span class="s-ico">${ICON.star}</span>${scoreText(shop.score)}</span>
+            <span><b>${shop.comments}</b> 条评价</span>
+            <span>人均 <b>¥${shop.avgPrice}</b></span>
+            <span>已售 ${shop.sold > 10000 ? (shop.sold / 10000).toFixed(1) + '万' : shop.sold}</span>`;
+        document.getElementById('addrText').textContent = (shop.area ? shop.area + ' · ' : '') + shop.address;
+        document.getElementById('hoursText').textContent = '营业时间 ' + (shop.openHours || '—');
+    }
+
+    async function loadVouchers() {
+        const res = await api('/voucher/list/' + shopId);
+        const list = res.data || [];
+        const box = document.getElementById('vouchers');
+        if (!list.length) {
+            box.innerHTML = '<div class="tiny" style="padding:6px 2px">暂无可用优惠券</div>';
+            return;
+        }
+        box.innerHTML = list.map(v => `
+            <div class="voucher ${v.type === 1 ? 'seckill' : ''}">
+                <div class="v-left">
+                    <div class="v-title">
+                        ${esc(v.title)}
+                        ${v.type === 1 ? '<span class="tag" style="margin-left:6px">秒杀</span>' : ''}
+                    </div>
+                    <div class="v-rule">${esc(v.rules || '到店出示即可使用')}</div>
+                    <div class="v-price">
+                        <span class="price"><span class="unit">¥</span><span class="num">${yuan(v.payValue)}</span></span>
+                        <span class="strike">¥${yuan(v.actualValue)}</span>
+                    </div>
+                </div>
+                <div class="v-right">
+                    <span class="stock">${v.stock !== null && v.stock !== undefined ? '剩 ' + v.stock + ' 张' : ''}</span>
+                    ${v.type === 1
+                        ? `<a class="btn btn-primary btn-sm" href="/voucher.html?id=${v.id}">去抢购</a>`
+                        : `<span class="tag gray">到店可用</span>`}
+                </div>
+            </div>`).join('');
+    }
+
+    async function loadUv() {
+        try {
+            const res = await api('/shop/' + shopId + '/uv', {quiet: true});
+            document.getElementById('uvText').textContent = '今日 ' + res.data + ' 人浏览';
+        } catch (e) { /* ignore */ }
+    }
+
+    function loadBlogs() {
+        createPager({
+            fetch: async (page) => {
+                const r = await api('/blog/of/shop?shopId=' + shopId + '&current=' + page);
+                return {list: r.data || [], total: r.total, size: 5};
+            },
+            render: (list) => {
+                document.getElementById('blogs')
+                    .insertAdjacentHTML('beforeend', list.map(blogCardHtml).join(''));
+            },
+            sentinel: document.getElementById('sentinel'),
+            emptyEl: document.getElementById('empty')
+        });
+    }
+
+    function goWrite() {
+        if (!requireLogin()) return;
+        location.href = '/blog-edit.html?shopId=' + shopId + '&shopName=' + encodeURIComponent(shop ? shop.name : '');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        document.getElementById('backBtn').onclick = () => history.length > 1 ? history.back() : location.href = '/index.html';
+        document.getElementById('writeBtn').onclick = goWrite;
+        document.getElementById('writeLink').onclick = goWrite;
+        document.getElementById('favBtn').onclick = () => toast('已收藏（演示）');
+        document.getElementById('favBtn2').onclick = () => toast('已收藏（演示）');
+
+        if (!shopId) {
+            toast('缺少店铺参数');
+            return;
+        }
+        try {
+            const res = await api('/shop/' + shopId);
+            shop = res.data;
+            renderCarousel();
+            renderInfo();
+            loadVouchers().catch(() => {});
+            loadUv();
+            loadBlogs();
+        } catch (e) {
+            /* handled in api */
+        }
+    });
+</script>
+</body>
+</html>

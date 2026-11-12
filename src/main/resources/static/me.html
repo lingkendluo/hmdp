@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>我的 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app">
+    <div class="profile-head">
+        <div class="pf-row">
+            <img class="pf-avatar" id="avatar" src="/imgs/avatar/1.svg" alt="">
+            <div>
+                <div class="pf-name" id="nickName">未登录</div>
+                <div class="pf-sub" id="subLine">登录后查看更多</div>
+            </div>
+        </div>
+        <div class="pf-stats">
+            <div class="st"><b id="stFollow">0</b><span>关注</span></div>
+            <div class="st"><b id="stFans">0</b><span>粉丝</span></div>
+            <div class="st"><b id="stBlog">0</b><span>笔记</span></div>
+        </div>
+    </div>
+
+    <div class="sign-card">
+        <div class="sign-head">
+            <div>
+                <div class="t">每日签到</div>
+                <div class="s">已连续签到 <b id="contDays">0</b> 天 · 本月 <b id="totalDays">0</b> 天</div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="signBtn">立即签到</button>
+        </div>
+        <div class="calendar" id="cal"></div>
+    </div>
+
+    <div class="section">
+        <div class="card">
+            <a class="listitem" href="/orders.html">
+                <div class="li-icon">🎫</div>
+                <div class="li-text">我的订单</div>
+                <div class="li-arrow">›</div>
+            </a>
+            <a class="listitem" href="/my-blogs.html">
+                <div class="li-icon">📝</div>
+                <div class="li-text">我的笔记</div>
+                <div class="li-arrow">›</div>
+            </a>
+            <a class="listitem" href="/follow-list.html">
+                <div class="li-icon">👥</div>
+                <div class="li-text">关注与粉丝</div>
+                <div class="li-arrow">›</div>
+            </a>
+            <a class="listitem" href="/voucher-list.html">
+                <div class="li-icon">⚡</div>
+                <div class="li-text">秒杀专区</div>
+                <div class="li-arrow">›</div>
+            </a>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="card">
+            <div class="listitem" id="logoutItem">
+                <div class="li-icon" style="background:#f2f3f5">🚪</div>
+                <div class="li-text" id="logoutText">退出登录</div>
+                <div class="li-arrow">›</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" style="text-align:center;padding:18px 0 8px">
+        <div class="tiny">黑马点评 · Spring Boot 3 + Redis 实战复刻</div>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    let signedDays = [];
+
+    function buildCalendar(year, month, today, signed) {
+        const first = new Date(year, month - 1, 1).getDay(); // 0=周日
+        const days = new Date(year, month, 0).getDate();
+        const wds = ['日', '一', '二', '三', '四', '五', '六'];
+        let html = wds.map(w => `<div class="wd">${w}</div>`).join('');
+        for (let i = 0; i < first; i++) html += '<div class="day blank"></div>';
+        for (let d = 1; d <= days; d++) {
+            const cls = ['day'];
+            if (signed.includes(d)) cls.push('done');
+            if (d === today) cls.push('today');
+            if (d > today) cls.push('future');
+            html += `<div class="${cls.join(' ')}">${d}</div>`;
+        }
+        document.getElementById('cal').innerHTML = html;
+    }
+
+    async function loadSign() {
+        if (!HM.isLogin()) {
+            document.getElementById('signBtn').textContent = '登录后签到';
+            document.getElementById('signBtn').onclick = goLogin;
+            const now = new Date();
+            buildCalendar(now.getFullYear(), now.getMonth() + 1, now.getDate(), []);
+            return;
+        }
+        const res = await api('/sign/status');
+        const d = res.data;
+        signedDays = d.signedDays || [];
+        document.getElementById('contDays').textContent = d.continuousDays || 0;
+        document.getElementById('totalDays').textContent = signedDays.length;
+        buildCalendar(d.year, d.month, d.today, signedDays);
+        const btn = document.getElementById('signBtn');
+        if (d.todaySigned) {
+            btn.textContent = '今日已签到';
+            btn.disabled = true;
+        } else {
+            btn.disabled = false;
+            btn.textContent = '立即签到';
+        }
+    }
+
+    async function doSign() {
+        const btn = document.getElementById('signBtn');
+        btn.disabled = true;
+        try {
+            const res = await api('/sign', {method: 'POST'});
+            toast(`签到成功，已连续 ${res.data.continuousDays} 天`);
+            await loadSign();
+        } catch (e) {
+            btn.disabled = false;
+        }
+    }
+
+    async function loadProfile() {
+        if (!HM.isLogin()) {
+            document.getElementById('nickName').textContent = '点击登录';
+            document.getElementById('subLine').textContent = '登录后可签到、抢券、发笔记';
+            document.querySelector('.pf-row').onclick = goLogin;
+            return;
+        }
+        try {
+            const res = await api('/user/me');
+            const {user, info} = res.data;
+            document.getElementById('avatar').src = user.icon || '/imgs/avatar/1.svg';
+            document.getElementById('nickName').textContent = user.nickName;
+            document.getElementById('subLine').textContent =
+                `${info?.city || '北京'} · Lv.${info?.level || 1} · ${info?.introduce || '这个人很懒'}`;
+
+            const c = await api('/follow/counts/' + user.id, {quiet: true});
+            document.getElementById('stFollow').textContent = c.data.follows;
+            document.getElementById('stFans').textContent = c.data.fans;
+
+            const b = await api('/blog/of/me?current=1', {quiet: true});
+            document.getElementById('stBlog').textContent = b.total || 0;
+        } catch (e) {
+            /* ignore */
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTabbar('me');
+        loadProfile();
+        loadSign().catch(() => {});
+        document.getElementById('signBtn').onclick = doSign;
+        document.getElementById('logoutItem').onclick = async () => {
+            if (!HM.isLogin()) {
+                goLogin();
+                return;
+            }
+            await HM.logout();
+        };
+        if (!HM.isLogin()) {
+            document.getElementById('logoutText').textContent = '去登录';
+        }
+    });
+</script>
+</body>
+</html>

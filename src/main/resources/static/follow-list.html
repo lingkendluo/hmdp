@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>关注与粉丝 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:24px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="title">关注与粉丝</div>
+        <div class="spacer"></div>
+    </header>
+
+    <div style="padding:12px 14px 0">
+        <div class="chip-row">
+            <button class="chip on" data-tab="follows">我关注的</button>
+            <button class="chip" data-tab="fans">我的粉丝</button>
+        </div>
+    </div>
+
+    <div class="section" id="list"></div>
+    <div class="empty" id="empty" style="display:none">
+        <div class="ico">👥</div>
+        <p id="emptyText">还没有关注任何人</p>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    let tab = 'follows';
+    let myId = null;
+
+    function rowHtml(u, showFollow) {
+        return `
+        <div class="listitem" style="border-radius:14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(17,24,39,.04)">
+            <img src="${u.icon || '/imgs/avatar/1.svg'}" style="width:44px;height:44px;border-radius:50%">
+            <div class="li-text">
+                <div style="font-size:15px">${esc(u.nickName)}</div>
+                <div class="tiny" style="margin-top:2px">ID ${u.id}</div>
+            </div>
+            ${showFollow ? `<button class="btn btn-ghost btn-sm" data-follow="${u.id}">关注</button>` : ''}
+        </div>`;
+    }
+
+    async function load() {
+        if (!myId) return;
+        const res = await api('/follow/' + tab + '/' + myId);
+        const list = res.data || [];
+        if (!list.length) {
+            document.getElementById('empty').style.display = 'block';
+            document.getElementById('emptyText').textContent =
+                tab === 'follows' ? '还没有关注任何人' : '还没有粉丝';
+            document.getElementById('list').innerHTML = '';
+            return;
+        }
+        document.getElementById('empty').style.display = 'none';
+        document.getElementById('list').innerHTML = list.map(u => rowHtml(u, tab === 'fans')).join('');
+        document.querySelectorAll('[data-follow]').forEach(btn => {
+            btn.onclick = async () => {
+                await api(`/follow/${btn.dataset.follow}/true`, {method: 'PUT'});
+                btn.textContent = '已关注';
+                btn.classList.remove('btn-ghost');
+                btn.classList.add('btn-line');
+                toast('关注成功');
+            };
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!HM.isLogin()) {
+            goLogin();
+            return;
+        }
+        myId = HM.user?.id;
+        if (!myId) {
+            const me = await api('/user/me', {quiet: true});
+            myId = me.data.user.id;
+        }
+        document.querySelectorAll('.chip').forEach(c => {
+            c.onclick = () => {
+                tab = c.dataset.tab;
+                document.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+                load();
+            };
+        });
+        load();
+    });
+</script>
+</body>
+</html>

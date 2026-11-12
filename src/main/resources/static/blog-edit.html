@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>发布探店笔记 · 黑马点评</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app no-tabbar" style="padding-bottom:24px">
+    <header class="topbar">
+        <button class="back" id="backBtn">‹</button>
+        <div class="title">发布笔记</div>
+        <div class="spacer"></div>
+        <button class="action" id="pubBtn">发布</button>
+    </header>
+
+    <div class="composer">
+        <div class="c-field">
+            <label>选择店铺</label>
+            <div class="chip-row" id="shopChips"></div>
+        </div>
+
+        <div class="c-field">
+            <label>标题</label>
+            <input class="c-input" id="title" maxlength="40" placeholder="一句话说清这家店好在哪">
+        </div>
+
+        <div class="c-field">
+            <label>正文</label>
+            <textarea class="c-input" id="content" maxlength="600" placeholder="说说环境、口味、服务，给后来的人一点参考…"></textarea>
+        </div>
+
+        <div class="c-field">
+            <label>配图（最多 3 张）</label>
+            <div class="uploader" id="uploader">
+                <label class="up-add" for="fileInput">＋</label>
+                <input type="file" id="fileInput" accept="image/*" style="display:none">
+            </div>
+        </div>
+
+        <div class="hint-bar" style="margin:6px 0 0">
+            <span>💡</span>
+            <span>发布后笔记会推送到粉丝的关注流（Redis SortedSet 推模式）。</span>
+        </div>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    let shopId = query('shopId') ? Number(query('shopId')) : null;
+    const shopName = query('shopName') ? decodeURIComponent(query('shopName')) : '';
+    let images = [];
+
+    async function loadShopChips() {
+        const res = await api('/shop/hot?current=1');
+        const list = res.data || [];
+        const box = document.getElementById('shopChips');
+        const all = shopId ? [] : [{id: list[0]?.id, name: list[0]?.name}];
+        const data = shopId ? [{id: shopId, name: shopName || '当前店铺'}, ...list] : [...all, ...list];
+        box.innerHTML = data.map(s => `
+            <button class="chip ${s.id === shopId ? 'on' : ''}" data-id="${s.id}" data-name="${esc(s.name)}">${esc(s.name)}</button>`).join('');
+        box.querySelectorAll('.chip').forEach(el => {
+            el.onclick = () => {
+                shopId = Number(el.dataset.id);
+                box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === el));
+            };
+        });
+        if (!shopId && data.length) shopId = Number(data[0].id);
+    }
+
+    function renderUploader() {
+        const box = document.getElementById('uploader');
+        box.querySelectorAll('.up-item').forEach(n => n.remove());
+        images.forEach((url, i) => {
+            const d = document.createElement('div');
+            d.className = 'up-item';
+            d.innerHTML = `<img class="cover" src="${url}">
+                <button style="position:absolute;right:3px;top:3px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:12px;line-height:1">×</button>`;
+            d.querySelector('button').onclick = () => {
+                images.splice(i, 1);
+                renderUploader();
+            };
+            box.insertBefore(d, box.querySelector('.up-add'));
+        });
+        box.querySelector('.up-add').style.display = images.length >= 3 ? 'none' : 'grid';
+    }
+
+    async function upload(file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/upload/blog', {
+            method: 'POST',
+            headers: HM.token ? {authorization: HM.token} : {},
+            body: fd
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.errorMsg || '上传失败');
+        return data.data;
+    }
+
+    async function publish() {
+        if (!requireLogin()) return;
+        const title = document.getElementById('title').value.trim();
+        const content = document.getElementById('content').value.trim();
+        if (!shopId) {
+            toast('请选择店铺');
+            return;
+        }
+        if (!title) {
+            toast('写个标题吧');
+            return;
+        }
+        if (!content) {
+            toast('正文还没写');
+            return;
+        }
+        const btn = document.getElementById('pubBtn');
+        btn.disabled = true;
+        try {
+            await api('/blog', {
+                method: 'POST',
+                body: {shopId, title, content, images: images.join(',')}
+            });
+            toast('发布成功');
+            setTimeout(() => location.href = '/shop.html?id=' + shopId, 600);
+        } catch (e) {
+            btn.disabled = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        loadShopChips().catch(() => {
+            if (shopId) {
+                document.getElementById('shopChips').innerHTML =
+                    `<button class="chip on">${esc(shopName || '当前店铺')}</button>`;
+            }
+        });
+        document.getElementById('pubBtn').onclick = publish;
+        document.getElementById('fileInput').onchange = async e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            toast('上传中…');
+            try {
+                const url = await upload(file);
+                images.push(url);
+                renderUploader();
+                toast('上传成功');
+            } catch (err) {
+                toast(err.message || '上传失败');
+            }
+            e.target.value = '';
+        };
+    });
+</script>
+</body>
+</html>
